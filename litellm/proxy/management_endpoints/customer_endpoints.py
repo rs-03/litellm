@@ -538,20 +538,12 @@ async def update_end_user(
     from litellm.proxy.proxy_server import litellm_proxy_admin_name, prisma_client
 
     try:
-        data_json: dict = data.json()
+        data_json: dict = data.model_dump(exclude_unset=True)
         # get the row from db
         if prisma_client is None:
             raise Exception("Not connected to DB!")
 
-        # get non default values for key
-        non_default_values = {}
-        for k, v in data_json.items():
-            if v is not None and v not in (
-                [],
-                {},
-                0,
-            ):  # models default to [], spend defaults to 0, we should not reset these values
-                non_default_values[k] = v
+        non_default_values = {k: v for k, v in data_json.items() if v is not None}
 
         ## Get end user table data ##
         end_user_table_data = await EndUserRepository(prisma_client).table.find_first(

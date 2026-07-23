@@ -83,6 +83,30 @@ def test_update_customer_success(mock_prisma_client, mock_user_api_key_auth):
     assert response.json()["alias"] == "Updated Test User"
 
 
+def test_update_customer_can_set_blocked_to_false(mock_prisma_client, mock_user_api_key_auth):
+    """Regression for #34379: a blocked customer can be unblocked.
+
+    blocked=False and other intentional falsy values (e.g. max_budget=0) must
+    reach the update; the old value-based filter dropped blocked=False because
+    False in (0,) is True in Python.
+    """
+    existing = LiteLLM_EndUserTable(user_id="cust-1", blocked=True)
+    updated = LiteLLM_EndUserTable(user_id="cust-1", blocked=False)
+    mock_prisma_client.db.litellm_endusertable.find_first = AsyncMock(return_value=existing)
+    update_mock = AsyncMock(return_value=updated)
+    mock_prisma_client.db.litellm_endusertable.update = update_mock
+
+    response = client.post(
+        "/customer/update",
+        json={"user_id": "cust-1", "blocked": False},
+        headers={"Authorization": "Bearer test-key"},
+    )
+
+    assert response.status_code == 200
+    update_mock.assert_awaited_once()
+    assert update_mock.await_args.kwargs["data"].get("blocked") is False
+
+
 def test_update_customer_not_found(mock_prisma_client, mock_user_api_key_auth):
     """
     Test that update_end_user raises a 404 ProxyException when user_id does not exist.
